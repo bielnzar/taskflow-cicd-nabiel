@@ -1,0 +1,23 @@
+# Build artifacts
+bin/
+*.exe
+
+# Test & coverage
+coverage.out
+*.test
+
+# Environment — JANGAN commit .env asli!
+.env
+
+# Go workspace
+go.work
+go.work.sum
+
+# OS & editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Docker volumes (lokal saja)
+pgdata/
