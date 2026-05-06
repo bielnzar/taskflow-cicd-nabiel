@@ -263,11 +263,6 @@ func TestRollbackStatusSimulation(t *testing.T) {
 }
 
 // ── [TODO] Tambahkan test berikut ─────────────────────────────────────────────
-// TODO mahasiswa:
-// - TestGetAll_WithStatusFilter (setelah bug #2 diperbaiki)
-// - TestGetStats_CompletionRate (setelah bug #1 diperbaiki)
-// - TestCreate_WithUnicodeTitle
-// - TestDelete_AndVerifyStats
 
 func TestGetStats_CompletionRate(t *testing.T) {
 	svc := newSvc()
@@ -301,5 +296,163 @@ func TestGetStats_CompletionRate(t *testing.T) {
 	// 1 done out of 4 = 25%
 	if stats.CompletionRate != 25.0 {
 		t.Errorf("CompletionRate = %.2f, want 25.0", stats.CompletionRate)
+	}
+}
+
+func TestGetAll_WithStatusFilter(t *testing.T) {
+	svc := newSvc()
+
+	// Create tasks with different statuses
+	task1, _ := svc.Create(model.CreateTaskRequest{Title: "Done 1"})
+	done := model.StatusDone
+	svc.Update(task1.ID, model.UpdateTaskRequest{Status: &done})
+
+	task2, _ := svc.Create(model.CreateTaskRequest{Title: "Todo 1"})
+	task3, _ := svc.Create(model.CreateTaskRequest{Title: "Todo 2"})
+
+	task4, _ := svc.Create(model.CreateTaskRequest{Title: "InProgress 1"})
+	inProgress := model.StatusInProgress
+	svc.Update(task4.ID, model.UpdateTaskRequest{Status: &inProgress})
+
+	// Test filter by done
+	doneTasks, err := svc.GetAll("done")
+	if err != nil {
+		t.Fatalf("GetAll(done) error = %v", err)
+	}
+	if len(doneTasks) != 1 {
+		t.Errorf("GetAll(done) = %d, want 1", len(doneTasks))
+	}
+
+	// Test filter by todo
+	todoTasks, err := svc.GetAll("todo")
+	if err != nil {
+		t.Fatalf("GetAll(todo) error = %v", err)
+	}
+	if len(todoTasks) != 2 {
+		t.Errorf("GetAll(todo) = %d, want 2", len(todoTasks))
+	}
+
+	// Test filter by in_progress
+	inProgressTasks, err := svc.GetAll("in_progress")
+	if err != nil {
+		t.Fatalf("GetAll(in_progress) error = %v", err)
+	}
+	if len(inProgressTasks) != 1 {
+		t.Errorf("GetAll(in_progress) = %d, want 1", len(inProgressTasks))
+	}
+
+	// Test no filter
+	allTasks, err := svc.GetAll("")
+	if err != nil {
+		t.Fatalf("GetAll(\"\") error = %v", err)
+	}
+	if len(allTasks) != 4 {
+		t.Errorf("GetAll(\"\") = %d, want 4", len(allTasks))
+	}
+
+	// Verify task IDs in todo filter
+	todoIDs := make(map[string]bool)
+	for _, task := range todoTasks {
+		todoIDs[task.ID] = true
+	}
+	if !todoIDs[task2.ID] || !todoIDs[task3.ID] {
+		t.Error("GetAll(todo) tidak mengembalikan task yang benar")
+	}
+}
+
+func TestCreate_WithUnicodeTitle(t *testing.T) {
+	svc := newSvc()
+
+	title := "Belajar DevOps \U0001f680 \u2014 \u0645\u0631\u062d\u0628\u0627 \u2014 \u4f60\u597d"
+	task, err := svc.Create(model.CreateTaskRequest{Title: title})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if task.Title != title {
+		t.Errorf("Title = %q, want %q", task.Title, title)
+	}
+}
+
+func TestDelete_AndVerifyStats(t *testing.T) {
+	svc := newSvc()
+
+	// Create 3 tasks: 1 done, 2 todo
+	task1, _ := svc.Create(model.CreateTaskRequest{Title: "Done 1"})
+	done := model.StatusDone
+	svc.Update(task1.ID, model.UpdateTaskRequest{Status: &done})
+
+	task2, _ := svc.Create(model.CreateTaskRequest{Title: "Todo 1"})
+	task3, _ := svc.Create(model.CreateTaskRequest{Title: "Todo 2"})
+
+	// Initial stats
+	stats, err := svc.GetStats()
+	if err != nil {
+		t.Fatalf("GetStats() error = %v", err)
+	}
+	if stats.Total != 3 {
+		t.Errorf("Total awal = %d, want 3", stats.Total)
+	}
+	if stats.ByStatus["done"] != 1 {
+		t.Errorf("ByStatus[done] awal = %d, want 1", stats.ByStatus["done"])
+	}
+	if stats.ByStatus["todo"] != 2 {
+		t.Errorf("ByStatus[todo] awal = %d, want 2", stats.ByStatus["todo"])
+	}
+
+	// Delete one todo task
+	_, err = svc.Delete(task2.ID)
+	if err != nil {
+		t.Fatalf("Delete() error = %v", err)
+	}
+
+	// Verify stats after delete
+	stats, err = svc.GetStats()
+	if err != nil {
+		t.Fatalf("GetStats() setelah delete error = %v", err)
+	}
+	if stats.Total != 2 {
+		t.Errorf("Total setelah delete = %d, want 2", stats.Total)
+	}
+	if stats.ByStatus["todo"] != 1 {
+		t.Errorf("ByStatus[todo] setelah delete = %d, want 1", stats.ByStatus["todo"])
+	}
+	if stats.ByStatus["done"] != 1 {
+		t.Errorf("ByStatus[done] setelah delete = %d, want 1", stats.ByStatus["done"])
+	}
+
+	// Delete done task
+	_, err = svc.Delete(task1.ID)
+	if err != nil {
+		t.Fatalf("Delete() error = %v", err)
+	}
+
+	// Verify stats after second delete
+	stats, err = svc.GetStats()
+	if err != nil {
+		t.Fatalf("GetStats() setelah delete kedua error = %v", err)
+	}
+	if stats.Total != 1 {
+		t.Errorf("Total setelah delete kedua = %d, want 1", stats.Total)
+	}
+	if stats.ByStatus["todo"] != 1 {
+		t.Errorf("ByStatus[todo] setelah delete kedua = %d, want 1", stats.ByStatus["todo"])
+	}
+	if stats.ByStatus["done"] != 0 {
+		t.Errorf("ByStatus[done] setelah delete kedua = %d, want 0", stats.ByStatus["done"])
+	}
+
+	// Verify deleted task not found
+	_, err = svc.GetByID(task2.ID)
+	if err == nil {
+		t.Error("GetByID() harus error setelah task dihapus")
+	}
+
+	// Verify remaining task still exists
+	remaining, err := svc.GetByID(task3.ID)
+	if err != nil {
+		t.Fatalf("GetByID() task yang tersisa error = %v", err)
+	}
+	if remaining.ID != task3.ID {
+		t.Errorf("ID task tersisa = %q, want %q", remaining.ID, task3.ID)
 	}
 }
