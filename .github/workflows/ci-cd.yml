@@ -10,14 +10,14 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
-  # CI: Vet, test, and coverage
+  # ── CI: Vet, Test, and Coverage (Matrix Testing) ────────────────────────────
   ci:
     name: CI - Go ${{ matrix.go-version }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        go-version: ['1.21', '1.22', '1.23']
+        go-version: ["1.21", "1.22", "1.23"]
     services:
       postgres:
         image: postgres:16-alpine
@@ -75,8 +75,8 @@ jobs:
           go tool cover -func=coverage.out
           COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
           echo "Total coverage: $COVERAGE%"
-          if (( $(echo "$COVERAGE < 50" | bc -l) )); then
-            echo "Coverage $COVERAGE% is below 50%"
+          if (( $(echo "$COVERAGE < 75" | bc -l) )); then
+            echo "Coverage $COVERAGE% is below 75% (Rubric Requirement)"
             exit 1
           fi
           echo "Coverage $COVERAGE% meets requirement"
@@ -97,7 +97,7 @@ jobs:
           name: taskflow-api-binary-go-${{ matrix.go-version }}
           path: bin/taskflow-api
 
-  # ── CD: Build & Push Docker Image ───────────────────────────────────────────
+  # ── CD: Build, Push, & Smoke Test (Post-Deployment Check) ────────────────────
   cd:
     name: CD - Docker Build & Push
     runs-on: ubuntu-latest
@@ -139,3 +139,44 @@ jobs:
 
       - name: Output image tag
         run: echo "Image pushed to ${{ env.REGISTRY }}/${{ steps.vars.outputs.image_name }}:sha-${{ steps.vars.outputs.sha_short }}"
+
+      # ── Skenario 4: Deployment Smoke Test Lokal via Container ────────────────
+      - name: Pull and run image for Smoke Test
+        env:
+          DATABASE_URL: postgres://taskflow:taskflow_secret@localhost:5432/taskflow?sslmode=disable
+        run: |
+          docker pull ${{ env.REGISTRY }}/${{ steps.vars.outputs.image_name }}:sha-${{ steps.vars.outputs.sha_short }}
+          docker run -d --rm \
+            --name taskflow-api \
+            -p 8080:8080 \
+            -e DATABASE_URL="$DATABASE_URL" \
+            -e PORT=8080 \
+            ${{ env.REGISTRY }}/${{ steps.vars.outputs.image_name }}:sha-${{ steps.vars.outputs.sha_short }}
+
+      - name: Wait for startup
+        run: |
+          echo "Waiting for server to be ready..."
+          sleep 10
+          echo "Checking container status..."
+          docker ps -a
+          echo "Container logs:"
+          docker logs taskflow-api || true
+
+      - name: Smoke test /health
+        run: |
+          echo "Testing /health endpoint..."
+          curl -v http://localhost:8080/health || (echo "❌ Health check failed"; exit 1)
+          echo "/health OK"
+
+      - name: Smoke test /api/v1/stats
+        run: |
+          echo "Testing /api/v1/stats endpoint..."
+          curl -v http://localhost:8080/api/v1/stats || (echo "❌ Stats endpoint failed"; exit 1)
+          echo "/api/v1/stats OK"
+
+      - name: Cleanup container
+        if: always()
+        run: |
+          echo "Container logs at cleanup:"
+          docker logs taskflow-api || true
+          docker stop taskflow-api || true
