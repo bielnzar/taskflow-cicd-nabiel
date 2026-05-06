@@ -150,17 +150,19 @@ jobs:
           echo "Pulling image..."
           docker pull ${{ env.REGISTRY }}/${{ steps.vars.outputs.image_name }}:sha-${{ steps.vars.outputs.sha_short }}
           echo "Starting container..."
-          docker run -d --rm \
+          # Run WITHOUT --rm so we can inspect logs if it crashes
+          docker run -d \
             --name taskflow-api \
             -p 8080:8080 \
             -e DATABASE_URL="$DATABASE_URL" \
             -e PORT=8080 \
             ${{ env.REGISTRY }}/${{ steps.vars.outputs.image_name }}:sha-${{ steps.vars.outputs.sha_short }}
-          echo "Container started, checking status..."
-          sleep 3
+          echo "Container started, waiting 2s..."
+          sleep 2
+          echo "Container status:"
           docker ps -a
-          echo "Initial container logs:"
-          docker logs taskflow-api 2>&1 || true
+          echo "Container logs (first 50 lines):"
+          docker logs taskflow-api 2>&1 | head -50 || true
 
       - name: Wait for startup
         run: |
@@ -171,7 +173,15 @@ jobs:
               exit 0
             fi
             echo "Attempt $i/30 - not ready yet..."
-            docker logs taskflow-api --tail 5 2>&1 || true
+            
+            # Check if container is still running
+            if ! docker ps | grep -q taskflow-api; then
+              echo "Container crashed! Logs:"
+              docker logs taskflow-api 2>&1 | tail -30 || true
+              exit 1
+            fi
+            
+            docker logs taskflow-api --tail 3 2>&1 || true
             sleep 1
           done
           echo "Server failed to start within 30 seconds"
@@ -184,13 +194,13 @@ jobs:
       - name: Smoke test /health
         run: |
           echo "Testing /health endpoint..."
-          curl -sf http://localhost:8080/health || (echo "❌ Health check failed"; exit 1)
+          curl -sf http://localhost:8080/health || (echo "Health check failed"; exit 1)
           echo "/health OK"
 
       - name: Smoke test /api/v1/stats
         run: |
           echo "Testing /api/v1/stats endpoint..."
-          curl -sf http://localhost:8080/api/v1/stats || (echo "❌ Stats endpoint failed"; exit 1)
+          curl -sf http://localhost:8080/api/v1/stats || (echo "Stats endpoint failed"; exit 1)
           echo "/api/v1/stats OK"
 
       - name: Cleanup container
@@ -199,3 +209,4 @@ jobs:
           echo "Container logs at cleanup:"
           docker logs taskflow-api 2>&1 || true
           docker stop taskflow-api 2>&1 || true
+          docker rm taskflow-api 2>&1 || true
