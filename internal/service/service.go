@@ -168,8 +168,8 @@ func CalculateCompletionRate(tasks []model.Task) float64 {
 			completed++
 		}
 	}
-	// BUG: integer division
-	return float64(completed/len(tasks)) * 100
+	// fixed bug 1
+	return float64(completed) / float64(len(tasks)) * 100
 }
 
 // generateID membuat ID unik berbasis timestamp + counter.

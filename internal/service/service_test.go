@@ -268,3 +268,38 @@ func TestRollbackStatusSimulation(t *testing.T) {
 // - TestGetStats_CompletionRate (setelah bug #1 diperbaiki)
 // - TestCreate_WithUnicodeTitle
 // - TestDelete_AndVerifyStats
+
+func TestGetStats_CompletionRate(t *testing.T) {
+	svc := newSvc()
+
+	// Create 4 tasks: 1 done, 2 todo, 1 in_progress
+	task1, _ := svc.Create(model.CreateTaskRequest{Title: "Done 1"})
+	done := model.StatusDone
+	svc.Update(task1.ID, model.UpdateTaskRequest{Status: &done})
+	svc.Create(model.CreateTaskRequest{Title: "Todo 1"})
+	svc.Create(model.CreateTaskRequest{Title: "Todo 2"})
+	task4, _ := svc.Create(model.CreateTaskRequest{Title: "InProgress 1"})
+	inProgress := model.StatusInProgress
+	svc.Update(task4.ID, model.UpdateTaskRequest{Status: &inProgress})
+
+	// Update first task to done
+	tasks, _ := svc.GetAll("")
+	for _, task := range tasks {
+		if task.Title == "Done 1" {
+			done := model.StatusDone
+			svc.Update(task.ID, model.UpdateTaskRequest{Status: &done})
+		}
+	}
+
+	stats, err := svc.GetStats()
+	if err != nil {
+		t.Fatalf("GetStats() error = %v", err)
+	}
+	if stats.Total != 4 {
+		t.Errorf("Total = %d, want 4", stats.Total)
+	}
+	// 1 done out of 4 = 25%
+	if stats.CompletionRate != 25.0 {
+		t.Errorf("CompletionRate = %.2f, want 25.0", stats.CompletionRate)
+	}
+}

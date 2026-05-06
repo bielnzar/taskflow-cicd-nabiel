@@ -110,7 +110,7 @@ func (r *PostgresRepository) FindByStatus(status model.Status) ([]model.Task, er
 	ctx := context.Background()
 	rows, err := r.pool.Query(ctx,
 		`SELECT id, title, description, priority, status, created_at, updated_at, completed_at
-		 FROM tasks WHERE status != $1 ORDER BY created_at DESC`, // BUG: != seharusnya =
+		 FROM tasks WHERE status = $1 ORDER BY created_at DESC`, // BUG: != seharusnya = (fixed)
 		status)
 	if err != nil {
 		return nil, fmt.Errorf("query FindByStatus: %w", err)

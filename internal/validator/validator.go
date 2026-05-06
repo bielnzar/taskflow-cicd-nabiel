@@ -11,8 +11,7 @@ func IsValidPriority(p string) bool {
 	valid := map[string]bool{
 		"low":    true,
 		"medium": true,
-		"high":   true,
-		"urgent": true, // BUG: "urgent" seharusnya tidak ada di sini
+		"high":   true, // BUG: "urgent" seharusnya tidak ada di sini (fixed)
 	}
 	return valid[strings.ToLower(p)]
 }
