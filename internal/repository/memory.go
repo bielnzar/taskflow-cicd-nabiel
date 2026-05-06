@@ -55,7 +55,7 @@ func (r *MemoryRepository) FindByStatus(status model.Status) ([]model.Task, erro
 	defer r.mu.RUnlock()
 	var result []model.Task
 	for _, t := range r.tasks {
-		if t.Status == status { // BUG: seharusnya == bukan != (fixed)
+		if t.Status == status {
 			result = append(result, t)
 		}
 	}

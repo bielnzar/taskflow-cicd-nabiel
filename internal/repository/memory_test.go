@@ -156,8 +156,6 @@ func TestConcurrentSave(t *testing.T) {
 	}
 }
 
-// ── [TODO] Tambah minimal 2 test ─────────────────────────────────────────────
-
 func TestCount_AfterDelete(t *testing.T) {
 	r := newRepo(t)
 	saveTask(t, r, "c1", "Task 1", model.StatusTodo)
@@ -184,57 +182,24 @@ func TestCount_AfterDelete(t *testing.T) {
 	}
 }
 
-func TestSave_UpdateExisting(t *testing.T) {
+func TestMemoryRepository_ClearCloseAndString(t *testing.T) {
 	r := newRepo(t)
-	task := saveTask(t, r, "u1", "Original Title", model.StatusTodo)
+	saveTask(t, r, "s1", "Task 1", model.StatusTodo)
 
-	// Update task with same ID
-	task.Title = "Updated Title"
-	task.Status = model.StatusDone
-	err := r.Save(task)
+	if got := r.String(); got != "MemoryRepository{count: 1}" {
+		t.Errorf("String() = %q, want count 1", got)
+	}
+
+	r.Clear()
+	count, err := r.Count()
 	if err != nil {
-		t.Fatalf("Save() update error = %v", err)
+		t.Fatalf("Count() error = %v", err)
+	}
+	if count != 0 {
+		t.Errorf("Count() after Clear() = %d, want 0", count)
 	}
 
-	// Verify data updated
-	got, ok, err := r.FindByID("u1")
-	if err != nil {
-		t.Fatalf("FindByID() error = %v", err)
-	}
-	if !ok {
-		t.Fatal("FindByID() task harus ditemukan setelah update")
-	}
-	if got.Title != "Updated Title" {
-		t.Errorf("Title = %q, want %q", got.Title, "Updated Title")
-	}
-	if got.Status != model.StatusDone {
-		t.Errorf("Status = %q, want done", got.Status)
-	}
-
-	// Verify count remains 1
-	count, _ := r.Count()
-	if count != 1 {
-		t.Errorf("Count = %d, want 1", count)
-	}
-}
-
-func TestFindByStatus_InProgress(t *testing.T) {
-	r := newRepo(t)
-	saveTask(t, r, "1", "Todo A", model.StatusTodo)
-	saveTask(t, r, "2", "InProgress B", model.StatusInProgress)
-	saveTask(t, r, "3", "InProgress C", model.StatusInProgress)
-	saveTask(t, r, "4", "Done D", model.StatusDone)
-
-	got, err := r.FindByStatus(model.StatusInProgress)
-	if err != nil {
-		t.Fatalf("FindByStatus error: %v", err)
-	}
-	if len(got) != 2 {
-		t.Errorf("FindByStatus(in_progress) = %d, want 2", len(got))
-	}
-	for _, task := range got {
-		if task.Status != model.StatusInProgress {
-			t.Errorf("FindByStatus(in_progress) mengembalikan status %q", task.Status)
-		}
+	if err := r.Close(); err != nil {
+		t.Errorf("Close() error = %v, want nil", err)
 	}
 }

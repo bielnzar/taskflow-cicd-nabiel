@@ -3,6 +3,7 @@ package service
 
 import (
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/taskflow/api/internal/model"
@@ -168,7 +169,6 @@ func CalculateCompletionRate(tasks []model.Task) float64 {
 			completed++
 		}
 	}
-	// fixed bug 1
 	return float64(completed) / float64(len(tasks)) * 100
 }
 
@@ -176,6 +176,6 @@ func CalculateCompletionRate(tasks []model.Task) float64 {
 var counter int64
 
 func generateID() string {
-	counter++
-	return fmt.Sprintf("%d-%d", time.Now().UnixNano(), counter)
+	next := atomic.AddInt64(&counter, 1)
+	return fmt.Sprintf("%d-%d", time.Now().UnixNano(), next)
 }

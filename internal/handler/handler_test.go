@@ -241,6 +241,137 @@ func TestRollbackIdempotencyHTTP(t *testing.T) {
 	}
 }
 
+func TestListTasks_WithStatusFilter(t *testing.T) {
+	srv := newServer(t)
+	defer srv.Close()
+
+	tasks := make([]model.Task, 0, 3)
+	for _, title := range []string{"Todo A", "Done B", "Todo C"} {
+		resp := doRequest(t, srv, http.MethodPost, "/api/v1/tasks",
+			map[string]string{"title": title})
+		var task model.Task
+		decodeBody(t, resp, &task)
+		tasks = append(tasks, task)
+	}
+
+	doneResp := doRequest(t, srv, http.MethodPut, "/api/v1/tasks/"+tasks[1].ID,
+		map[string]string{"status": "done"})
+	if doneResp.StatusCode != http.StatusOK {
+		t.Fatalf("update done status = %d, want 200", doneResp.StatusCode)
+	}
+	doneResp.Body.Close()
+
+	filteredResp := doRequest(t, srv, http.MethodGet, "/api/v1/tasks?status=done", nil)
+	if filteredResp.StatusCode != http.StatusOK {
+		t.Fatalf("filtered status = %d, want 200", filteredResp.StatusCode)
+	}
+	var filtered model.TaskListResponse
+	decodeBody(t, filteredResp, &filtered)
+	if filtered.Total != 1 {
+		t.Fatalf("filtered total = %d, want 1", filtered.Total)
+	}
+	if filtered.Tasks[0].Status != model.StatusDone {
+		t.Errorf("filtered task status = %q, want done", filtered.Tasks[0].Status)
+	}
+
+	badResp := doRequest(t, srv, http.MethodGet, "/api/v1/tasks?status=blocked", nil)
+	if badResp.StatusCode != http.StatusBadRequest {
+		t.Errorf("invalid status filter response = %d, want 400", badResp.StatusCode)
+	}
+	badResp.Body.Close()
+}
+
+func TestUpdateTask_TitleOnly(t *testing.T) {
+	srv := newServer(t)
+	defer srv.Close()
+
+	resp := doRequest(t, srv, http.MethodPost, "/api/v1/tasks",
+		map[string]string{"title": "Old Title"})
+	var task model.Task
+	decodeBody(t, resp, &task)
+
+	updateResp := doRequest(t, srv, http.MethodPut, "/api/v1/tasks/"+task.ID,
+		map[string]string{"title": "New Title"})
+	if updateResp.StatusCode != http.StatusOK {
+		t.Fatalf("update title status = %d, want 200", updateResp.StatusCode)
+	}
+	var updated model.Task
+	decodeBody(t, updateResp, &updated)
+	if updated.Title != "New Title" {
+		t.Errorf("Title = %q, want New Title", updated.Title)
+	}
+	if updated.Status != model.StatusTodo {
+		t.Errorf("Status = %q, want todo", updated.Status)
+	}
+	if updated.CompletedAt != nil {
+		t.Error("CompletedAt should remain nil when only title changes")
+	}
+
+	invalidResp := doRequest(t, srv, http.MethodPut, "/api/v1/tasks/"+task.ID,
+		map[string]string{"status": "blocked"})
+	if invalidResp.StatusCode != http.StatusBadRequest {
+		t.Errorf("invalid update status = %d, want 400", invalidResp.StatusCode)
+	}
+	invalidResp.Body.Close()
+}
+
+func TestStats_ConsistencyWithTaskList(t *testing.T) {
+	srv := newServer(t)
+	defer srv.Close()
+
+	resp := doRequest(t, srv, http.MethodPost, "/api/v1/tasks",
+		map[string]string{"title": "Done"})
+	var doneTask model.Task
+	decodeBody(t, resp, &doneTask)
+	doneResp := doRequest(t, srv, http.MethodPut, "/api/v1/tasks/"+doneTask.ID,
+		map[string]string{"status": "done"})
+	doneResp.Body.Close()
+
+	for _, title := range []string{"Todo", "Progress"} {
+		resp := doRequest(t, srv, http.MethodPost, "/api/v1/tasks",
+			map[string]string{"title": title})
+		resp.Body.Close()
+	}
+
+	listResp := doRequest(t, srv, http.MethodGet, "/api/v1/tasks", nil)
+	var list model.TaskListResponse
+	decodeBody(t, listResp, &list)
+
+	statsResp := doRequest(t, srv, http.MethodGet, "/api/v1/stats", nil)
+	var stats model.StatsResponse
+	decodeBody(t, statsResp, &stats)
+
+	if stats.Total != list.Total {
+		t.Errorf("stats total = %d, task list total = %d", stats.Total, list.Total)
+	}
+	if stats.ByStatus["done"] != 1 {
+		t.Errorf("stats done count = %d, want 1", stats.ByStatus["done"])
+	}
+	if stats.CompletionRate != list.CompletionRate {
+		t.Errorf("stats completion = %.2f, list completion = %.2f", stats.CompletionRate, list.CompletionRate)
+	}
+}
+
+func TestCreateMultipleTasks_UniqueIDs(t *testing.T) {
+	srv := newServer(t)
+	defer srv.Close()
+
+	ids := make(map[string]bool)
+	for i := 0; i < 50; i++ {
+		resp := doRequest(t, srv, http.MethodPost, "/api/v1/tasks",
+			map[string]string{"title": "Task"})
+		var task model.Task
+		decodeBody(t, resp, &task)
+		if task.ID == "" {
+			t.Fatal("created task ID is empty")
+		}
+		if ids[task.ID] {
+			t.Fatalf("duplicate task ID found: %s", task.ID)
+		}
+		ids[task.ID] = true
+	}
+}
+
 // ── [SECOPS] Input Validation ─────────────────────────────────────────────────
 
 func TestSecOpsInputValidation(t *testing.T) {
