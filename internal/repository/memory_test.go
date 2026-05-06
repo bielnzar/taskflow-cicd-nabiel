@@ -156,6 +156,11 @@ func TestConcurrentSave(t *testing.T) {
 	}
 }
 
+// ── [TODO] Tambah minimal 2 test ─────────────────────────────────────────────
+// - TestSave_UpdateExisting: simpan task dengan ID sama → cek data terupdate
+// - TestCount_AfterDelete: Count akurat setelah serangkaian save + delete
+// - TestFindByStatus_InProgress: filter in_progress (setelah Bug #2 diperbaiki)
+
 func TestCount_AfterDelete(t *testing.T) {
 	r := newRepo(t)
 	saveTask(t, r, "c1", "Task 1", model.StatusTodo)
@@ -179,6 +184,61 @@ func TestCount_AfterDelete(t *testing.T) {
 	count, _ = r.Count()
 	if count != 2 {
 		t.Errorf("Count after deleting non-existent = %d, want 2", count)
+	}
+}
+
+func TestSave_UpdateExisting(t *testing.T) {
+	r := newRepo(t)
+	task := saveTask(t, r, "u1", "Original Title", model.StatusTodo)
+
+	// Update task with same ID
+	task.Title = "Updated Title"
+	task.Status = model.StatusDone
+	err := r.Save(task)
+	if err != nil {
+		t.Fatalf("Save() update error = %v", err)
+	}
+
+	// Verify data updated
+	got, ok, err := r.FindByID("u1")
+	if err != nil {
+		t.Fatalf("FindByID() error = %v", err)
+	}
+	if !ok {
+		t.Fatal("FindByID() task harus ditemukan setelah update")
+	}
+	if got.Title != "Updated Title" {
+		t.Errorf("Title = %q, want %q", got.Title, "Updated Title")
+	}
+	if got.Status != model.StatusDone {
+		t.Errorf("Status = %q, want done", got.Status)
+	}
+
+	// Verify count remains 1
+	count, _ := r.Count()
+	if count != 1 {
+		t.Errorf("Count = %d, want 1", count)
+	}
+}
+
+func TestFindByStatus_InProgress(t *testing.T) {
+	r := newRepo(t)
+	saveTask(t, r, "1", "Todo A", model.StatusTodo)
+	saveTask(t, r, "2", "InProgress B", model.StatusInProgress)
+	saveTask(t, r, "3", "InProgress C", model.StatusInProgress)
+	saveTask(t, r, "4", "Done D", model.StatusDone)
+
+	got, err := r.FindByStatus(model.StatusInProgress)
+	if err != nil {
+		t.Fatalf("FindByStatus error: %v", err)
+	}
+	if len(got) != 2 {
+		t.Errorf("FindByStatus(in_progress) = %d, want 2", len(got))
+	}
+	for _, task := range got {
+		if task.Status != model.StatusInProgress {
+			t.Errorf("FindByStatus(in_progress) mengembalikan status %q", task.Status)
+		}
 	}
 }
 
