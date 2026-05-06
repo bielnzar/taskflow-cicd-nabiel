@@ -160,3 +160,29 @@ func TestConcurrentSave(t *testing.T) {
 // - TestSave_UpdateExisting: simpan task dengan ID sama → cek data terupdate
 // - TestCount_AfterDelete: Count akurat setelah serangkaian save + delete
 // - TestFindByStatus_InProgress: filter in_progress (setelah Bug #2 diperbaiki)
+
+func TestCount_AfterDelete(t *testing.T) {
+	r := newRepo(t)
+	saveTask(t, r, "c1", "Task 1", model.StatusTodo)
+	saveTask(t, r, "c2", "Task 2", model.StatusDone)
+	saveTask(t, r, "c3", "Task 3", model.StatusInProgress)
+
+	count, _ := r.Count()
+	if count != 3 {
+		t.Errorf("Count = %d, want 3", count)
+	}
+
+	// Delete one
+	r.Delete("c2")
+	count, _ = r.Count()
+	if count != 2 {
+		t.Errorf("Count after delete = %d, want 2", count)
+	}
+
+	// Delete non-existent
+	r.Delete("non-existent")
+	count, _ = r.Count()
+	if count != 2 {
+		t.Errorf("Count after deleting non-existent = %d, want 2", count)
+	}
+}
