@@ -10,14 +10,14 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
-  # CI: Vet, test, and coverage
+  # ── CI: Vet, Test, and Coverage (Matrix Testing) ────────────────────────────
   ci:
     name: CI - Go ${{ matrix.go-version }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        go-version: ['1.21', '1.22', '1.23']
+        go-version: ["1.21", "1.22", "1.23"]
     services:
       postgres:
         image: postgres:16-alpine
@@ -60,7 +60,9 @@ jobs:
       - name: Check Go 1.21 compatibility note
         if: matrix.go-version == '1.21'
         run: |
-          echo "Note: Go 1.21 uses legacy routing (no method matching)"
+          echo "Checking if pattern routing is supported in Go 1.21..."
+          go build -o /dev/null ./cmd/server 2>&1 | grep -q "pattern" && echo "Pattern routing not supported (expected)" || echo "No pattern routing errors"
+          echo "ℹ️ Note: Go 1.21 uses legacy routing (no method matching)"
           echo "Pattern routing (GET /path) is a Go 1.22+ feature"
           echo "This code compiles but routing behavior differs from 1.22+"
 
@@ -75,8 +77,8 @@ jobs:
           go tool cover -func=coverage.out
           COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
           echo "Total coverage: $COVERAGE%"
-          if (( $(echo "$COVERAGE < 50" | bc -l) )); then
-            echo "Coverage $COVERAGE% is below 50%"
+          if (( $(echo "$COVERAGE < 75" | bc -l) )); then
+            echo "Coverage $COVERAGE% is below 75% (Rubric Requirement)"
             exit 1
           fi
           echo "Coverage $COVERAGE% meets requirement"
@@ -97,7 +99,7 @@ jobs:
           name: taskflow-api-binary-go-${{ matrix.go-version }}
           path: bin/taskflow-api
 
-  # ── CD: Build & Push Docker Image ───────────────────────────────────────────
+  # ── CD: Build, Push, & Smoke Test (Post-Deployment Check) ────────────────────
   cd:
     name: CD - Docker Build & Push
     runs-on: ubuntu-latest
@@ -139,3 +141,72 @@ jobs:
 
       - name: Output image tag
         run: echo "Image pushed to ${{ env.REGISTRY }}/${{ steps.vars.outputs.image_name }}:sha-${{ steps.vars.outputs.sha_short }}"
+
+      # ── Skenario 4: Deployment Smoke Test Lokal via Container ────────────────
+      - name: Pull and run image for Smoke Test
+        env:
+          DATABASE_URL: postgres://taskflow:taskflow_secret@localhost:5432/taskflow?sslmode=disable
+        run: |
+          echo "Pulling image..."
+          docker pull ${{ env.REGISTRY }}/${{ steps.vars.outputs.image_name }}:sha-${{ steps.vars.outputs.sha_short }}
+          echo "Starting container..."
+          # Run WITHOUT --rm so we can inspect logs if it crashes
+          docker run -d \
+            --name taskflow-api \
+            -p 8080:8080 \
+            -e DATABASE_URL="$DATABASE_URL" \
+            -e PORT=8080 \
+            ${{ env.REGISTRY }}/${{ steps.vars.outputs.image_name }}:sha-${{ steps.vars.outputs.sha_short }}
+          echo "Container started, waiting 2s..."
+          sleep 2
+          echo "Container status:"
+          docker ps -a
+          echo "Container logs (first 50 lines):"
+          docker logs taskflow-api 2>&1 | head -50 || true
+
+      - name: Wait for startup
+        run: |
+          echo "Waiting for server to be ready (retrying for 30s)..."
+          for i in {1..30}; do
+            if curl -sf http://localhost:8080/health > /dev/null 2>&1; then
+              echo "Server is ready after ${i} seconds"
+              exit 0
+            fi
+            echo "Attempt $i/30 - not ready yet..."
+            
+            # Check if container is still running
+            if ! docker ps | grep -q taskflow-api; then
+              echo "Container crashed! Logs:"
+              docker logs taskflow-api 2>&1 | tail -30 || true
+              exit 1
+            fi
+            
+            docker logs taskflow-api --tail 3 2>&1 || true
+            sleep 1
+          done
+          echo "Server failed to start within 30 seconds"
+          echo "Final container logs:"
+          docker logs taskflow-api 2>&1 || true
+          echo "Container status:"
+          docker ps -a
+          exit 1
+
+      - name: Smoke test /health
+        run: |
+          echo "Testing /health endpoint..."
+          curl -sf http://localhost:8080/health || (echo "Health check failed"; exit 1)
+          echo "/health OK"
+
+      - name: Smoke test /api/v1/stats
+        run: |
+          echo "Testing /api/v1/stats endpoint..."
+          curl -sf http://localhost:8080/api/v1/stats || (echo "Stats endpoint failed"; exit 1)
+          echo "/api/v1/stats OK"
+
+      - name: Cleanup container
+        if: always()
+        run: |
+          echo "Container logs at cleanup:"
+          docker logs taskflow-api 2>&1 || true
+          docker stop taskflow-api 2>&1 || true
+          docker rm taskflow-api 2>&1 || true
