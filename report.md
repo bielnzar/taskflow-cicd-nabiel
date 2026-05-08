@@ -469,7 +469,9 @@ govulncheck-report
 
 ### Analisis Hasil govulncheck
 
-Scan lokal `govulncheck` menghasilkan report JSON dan menemukan beberapa vulnerability pada dependency serta toolchain yang digunakan saat scan. Istilah yang dipakai pada analisis ini dibuat lebih spesifik agar mudah dipertanggungjawabkan:
+Scan lokal `govulncheck` menghasilkan report JSON dan menemukan beberapa vulnerability pada dependency serta toolchain yang digunakan saat scan. 
+
+Berikut adalah beberapa istilah yang perlu untuk diketahui dalam pembacaan hasil govulncheck :
 
 | Istilah | Arti |
 | --- | --- |
@@ -477,7 +479,7 @@ Scan lokal `govulncheck` menghasilkan report JSON dan menemukan beberapa vulnera
 | Dependency-level finding | Vulnerability ada pada dependency graph, tetapi trace langsung ke business logic aplikasi tidak terlihat pada potongan report yang diperiksa |
 | No finding | Tool tidak menemukan masalah pada area tersebut |
 
-Ringkasan temuan utama:
+Berikut adalah temuan govulncheck :
 
 | Area | Contoh ID | Analisis | Rekomendasi |
 | --- | --- | --- | --- |
@@ -485,23 +487,9 @@ Ringkasan temuan utama:
 | Go standard library lokal `v1.26.2` | `GO-2026-4971`, `GO-2026-4918`, `GO-2026-4981` | Reachable runtime/toolchain finding karena beberapa trace melewati `net/http`, koneksi database, dan `main` | Gunakan Go patch version yang sudah fixed, misalnya `v1.26.3` atau versi stabil sesuai CI |
 | `golang.org/x/crypto v0.17.0` | `GO-2024-3321`, `GO-2025-3487`, `GO-2025-4116` | Dependency-level finding karena module ada di dependency graph, tetapi tidak terlihat sebagai bug langsung di business logic aplikasi | Update dependency transitif melalui `go get -u` secara terkontrol |
 
-Cara konfirmasi dari report:
-
-```powershell
-Select-String -Path govulncheck-report.json -Pattern "GO-2026-4771","GO-2026-4772","NewPostgresRepository","FindByStatus","github.com/jackc/pgx/v5" -Context 3,6
-```
-
-Command tersebut dipakai untuk memastikan bahwa temuan `pgx/v5` tidak hanya muncul di `go.sum`, tetapi juga memiliki trace ke fungsi repository aplikasi.
-
-```powershell
-Select-String -Path govulncheck-report.json -Pattern "GO-2026-4971","ListenAndServe","cmd/server","main" -Context 3,6
-```
-
-Command tersebut dipakai untuk memastikan bahwa temuan standard library memiliki jalur pemakaian dari `net/http` ke entry point aplikasi.
-
 Kesimpulan `govulncheck`: temuan yang paling perlu diprioritaskan adalah reachable finding pada `pgx/v5` dan toolchain Go. Temuan `x/crypto` tetap dicatat sebagai risiko dependency-level, tetapi tidak diklaim sebagai bug langsung pada kode aplikasi. Tidak ada indikasi SQL injection atau kebocoran secret dari hasil `govulncheck`.
 
-Tindak lanjut yang disarankan adalah membuat branch khusus dependency update, memperbarui `pgx/v5` dan dependency transitif, lalu menjalankan ulang `go test`, integration test, `govulncheck`, dan `gosec`.
+**Rekomendasi**: membuat branch khusus dependency update, memperbarui `pgx/v5` dan dependency transitif, lalu menjalankan ulang `go test`, integration test, `govulncheck`, dan `gosec`.
 
 ### SAST dengan gosec
 
