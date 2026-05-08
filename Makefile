@@ -1,7 +1,7 @@
 # Makefile - TaskFlow API
 BINARY   = bin/taskflow-api
 IMAGE    = taskflow-api
-REGISTRY ?= ghcr.io/your-username
+REGISTRY ?= ghcr.io/trenttzzz
 VERSION  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "dev")
 DB_URL   ?= postgres://taskflow:taskflow_secret@localhost:5432/taskflow?sslmode=disable
 COVERAGE_MIN ?= 75.0

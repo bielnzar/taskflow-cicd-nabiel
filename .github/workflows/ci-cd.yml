@@ -210,3 +210,38 @@ jobs:
           docker logs taskflow-api 2>&1 || true
           docker stop taskflow-api 2>&1 || true
           docker rm taskflow-api 2>&1 || true
+
+  # ── Tag Stable: only after all CI + CD + smoke tests pass ──────────────────
+  tag-stable:
+    name: Tag Stable
+    runs-on: ubuntu-latest
+    needs: [cd]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && needs.cd.result == 'success'
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set image name (lowercase)
+        id: vars
+        run: |
+          echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          echo "image_name=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+
+      - name: Tag and push stable
+        run: |
+          docker pull ${{ env.REGISTRY }}/${{ steps.vars.outputs.image_name }}:sha-${{ steps.vars.outputs.sha_short }}
+          docker tag ${{ env.REGISTRY }}/${{ steps.vars.outputs.image_name }}:sha-${{ steps.vars.outputs.sha_short }} \
+            ${{ env.REGISTRY }}/${{ steps.vars.outputs.image_name }}:stable
+          docker push ${{ env.REGISTRY }}/${{ steps.vars.outputs.image_name }}:stable
+          echo "✅ Tagged sha-${{ steps.vars.outputs.sha_short }} as stable"
