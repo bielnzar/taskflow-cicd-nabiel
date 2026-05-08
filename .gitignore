@@ -4,6 +4,7 @@ bin/
 
 # Test & coverage
 coverage.out
+coverage
 *.test
 
 # Environment — JANGAN commit .env asli!
@@ -25,3 +26,12 @@ pgdata/
 # context
 context/pembagian.md
 context/plan.md
+
+# Local task notes
+task-orang7.md
+
+# Local security scan reports
+govulncheck-report.json
+gosec-report.json
+gitleaks-report.json
+trivy-report.json
