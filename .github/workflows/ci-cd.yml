@@ -311,3 +311,25 @@ jobs:
             ${{ env.REGISTRY }}/${{ steps.vars.outputs.image_name }}:stable
           docker push ${{ env.REGISTRY }}/${{ steps.vars.outputs.image_name }}:stable
           echo "✅ Tagged sha-${{ steps.vars.outputs.sha_short }} as stable"
+
+  # ── Notification: Skenario 4 (Person 5) ──────────────────────────────────────
+  notify:
+    name: Telegram Notification
+    runs-on: ubuntu-latest
+    needs: [ci, security, cd, tag-stable]
+    if: always() # Pastikan notifikasi selalu berjalan meskipun job sebelumnya gagal
+
+    steps:
+      - name: Notify Success
+        if: ${{ !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
+        run: |
+          curl -s -X POST -H 'Content-Type: application/json' \
+            -d '{"chat_id": "${{ secrets.TELEGRAM_TO }}", "parse_mode": "Markdown", "text": "✅ *TaskFlow Pipeline SUCCESS*\n*Branch:* ${{ github.ref_name }}\n*Commit:* ${{ github.sha }}\n*URL:* ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"}' \
+            https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage
+
+      - name: Notify Failure
+        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
+        run: |
+          curl -s -X POST -H 'Content-Type: application/json' \
+            -d '{"chat_id": "${{ secrets.TELEGRAM_TO }}", "parse_mode": "Markdown", "text": "❌ *TaskFlow Pipeline FAILED*\n*Branch:* ${{ github.ref_name }}\n*Commit:* ${{ github.sha }}\n*URL:* ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"}' \
+            https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage
