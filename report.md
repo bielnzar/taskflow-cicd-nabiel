@@ -844,6 +844,18 @@ Gambar berikut menunjukkan hasil `gitleaks protect --staged --redact`. Hasilnya 
 
 ![Hasil gitleaks lokal](img/local-gitleaks.png)
 
+### Notifikasi Telegram (Sukses dan Gagal)
+
+Sebagai bagian dari Skenario 4, pipeline telah dilengkapi dengan notifikasi otomatis ke grup Telegram menggunakan webhook API. Notifikasi membedakan status rilis (✅ SUCCESS atau ❌ FAILED) dan mencantumkan waktu eksekusi dalam zona waktu WIB, branch, commit SHA, dan tautan langsung ke log GitHub Actions.
+
+Gambar berikut adalah bukti masuknya notifikasi ke grup Telegram tim saat pipeline berhasil dan saat terjadi kegagalan (misalnya ketika *smoke test* atau *unit test* gagal):
+
+**Notifikasi Pipeline Sukses (✅):**
+![Notifikasi Telegram Sukses](img/telegram-success.png)
+
+**Notifikasi Pipeline Gagal (❌):**
+![Notifikasi Telegram Gagal](img/telegram-failed.png)
+
 ## 12. Kesimpulan
 
 Pipeline CI/CD TaskFlow API sudah mencakup kebutuhan utama penugasan:
@@ -857,6 +869,7 @@ Pipeline CI/CD TaskFlow API sudah mencakup kebutuhan utama penugasan:
 - Docker image dibuild dengan multi-stage build dan runtime `scratch`.
 - Image diberi tag berbasis commit SHA agar mudah dilacak.
 - Smoke test memastikan image yang dideploy tetap bisa melayani endpoint utama.
+- Notifikasi Telegram otomatis dikonfigurasi untuk melaporkan status akhir pipeline (sukses/gagal) beserta detail eksekusi secara real-time ke seluruh tim.
 - Tag `stable` hanya diperbarui setelah pipeline dan smoke test sukses.
 - Rollback tersedia melalui Makefile dan didokumentasikan.
 
