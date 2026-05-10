@@ -325,7 +325,7 @@ jobs:
         run: |
           TIME=$(TZ='Asia/Jakarta' date +'%Y-%m-%d %H:%M:%S WIB')
           curl -s -X POST -H 'Content-Type: application/json' \
-            -d '{"chat_id": "${{ secrets.TELEGRAM_TO }}", "parse_mode": "Markdown", "text": "✅ *TaskFlow Pipeline SUCCESS*\n*Waktu:* '"$TIME"'\n*Branch:* ${{ github.ref_name }}\n*Commit:* ${{ github.sha }}\n*URL:* ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"}' \
+            -d '{"chat_id": "${{ secrets.TELEGRAM_TO }}", "parse_mode": "Markdown", "text": "✅ *TaskFlow Pipeline SUCCESS*\n\n*Waktu:* '"$TIME"'\n*Branch:* ${{ github.ref_name }}\n*Commit:* ${{ github.sha }}\n\n*URL:* ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"}' \
             https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage
 
       - name: Notify Failure
@@ -333,5 +333,5 @@ jobs:
         run: |
           TIME=$(TZ='Asia/Jakarta' date +'%Y-%m-%d %H:%M:%S WIB')
           curl -s -X POST -H 'Content-Type: application/json' \
-            -d '{"chat_id": "${{ secrets.TELEGRAM_TO }}", "parse_mode": "Markdown", "text": "❌ *TaskFlow Pipeline FAILED*\n*Waktu:* '"$TIME"'\n*Branch:* ${{ github.ref_name }}\n*Commit:* ${{ github.sha }}\n*URL:* ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"}' \
+            -d '{"chat_id": "${{ secrets.TELEGRAM_TO }}", "parse_mode": "Markdown", "text": "❌ *TaskFlow Pipeline FAILED*\n\n*Waktu:* '"$TIME"'\n*Branch:* ${{ github.ref_name }}\n*Commit:* ${{ github.sha }}\n\n*URL:* ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"}' \
             https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage

@@ -26,7 +26,7 @@ func New(svc *service.TaskService) *Handler {
 
 // RegisterRoutes mendaftarkan semua route.
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/health-broken", method(http.MethodGet, h.Health))
+	mux.HandleFunc("/health", method(http.MethodGet, h.Health))
 	mux.HandleFunc("/api/v1/tasks", h.tasksRoot)
 	mux.HandleFunc("/api/v1/tasks/", h.taskByID)
 	mux.HandleFunc("/api/v1/stats", method(http.MethodGet, h.GetStats))
